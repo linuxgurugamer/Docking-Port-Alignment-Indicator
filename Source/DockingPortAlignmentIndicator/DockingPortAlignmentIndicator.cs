@@ -447,6 +447,8 @@ namespace NavyFish
             {
                 if (currentActiveVessel != FlightGlobals.ActiveVessel)
                     onVesselChanged();
+                else if (referencePart != currentActiveVessel.GetReferenceTransformPart())
+                    onReferenceChanged();
 
                 determineTargetPort();
                 if (targetedDockingModule != null) calculateGaugeData();
@@ -462,6 +464,20 @@ namespace NavyFish
 
             if(currentActiveVessel)
                 findReferencePoints();
+
+            onReferenceChanged();
+        }
+
+        public static void onReferenceChanged()
+        {
+            referencePart = null;
+            referencePartNamed = null;
+
+            if(currentActiveVessel)
+            {
+                determineReferencePoint();
+                referencePartIndex = referencePoints.FindIndex(m => m.part.Equals(referencePart));
+            }
         }
 
         private static bool isIVA()
@@ -494,11 +510,6 @@ namespace NavyFish
         {
             referencePart = FlightGlobals.ActiveVessel.GetReferenceTransformPart();
             referencePartNamed = referencePart ? referencePart.FindModuleImplementing<ModuleDockingNodeNamed>() : null;
-        }
-
-        private static void determineReferencePointIndex()
-        {
-            referencePartIndex = referencePoints.FindIndex(m => m.part.Equals(referencePart));
         }
 
         /// <summary>
@@ -1599,12 +1610,8 @@ namespace NavyFish
 
         public static void cycleReferencePoint(int direction)
         {
-            if (referencePartIndex == -1)
-            {
-//                findReferencePoints();
-            }
-
-            if (referencePartIndex == -1) return;
+            if(referencePoints.Count == 0)
+                return;
 
             int newIndex = referencePartIndex + direction;
             if (newIndex < 0)
@@ -1616,30 +1623,26 @@ namespace NavyFish
                 newIndex = 0;
             }
 
-            if (newIndex != referencePartIndex)
+            PartModule module = referencePoints[newIndex];
+
+            var node = module as ModuleDockingNode;
+            var pod = module as ModuleCommand;
+            var claw = module as ModuleGrappleNode;
+
+            //Thanks Mihara!
+            if (node != null)
             {
-                PartModule module = referencePoints[newIndex];
-
-                var node = module as ModuleDockingNode;
-                var pod = module as ModuleCommand;
-                var claw = module as ModuleGrappleNode;
-
-                //Thanks Mihara!
-                if (node != null)
-                {
-                    node.MakeReferenceTransform();
-                } else if (pod != null)
-                {
-                    pod.MakeReference();
-                } else if (claw != null)
-                {
-                    claw.MakeReferenceTransform();
-                }
-
-
-                determineReferencePoint();
-                determineReferencePointIndex();
+                node.MakeReferenceTransform();
+            } else if (pod != null)
+            {
+                pod.MakeReference();
+            } else if (claw != null)
+            {
+                claw.MakeReferenceTransform();
             }
+
+            determineReferencePoint();
+            referencePartIndex = newIndex;
         }
 
         public static void clearRenameHighlightBoxRPM()
