@@ -408,8 +408,9 @@ namespace NavyFish
 
                     onReferenceChanged();
                 }
+                else if((currentTarget != FlightGlobals.fetch.VesselTarget) || resetTarget)
+                    onTargetChanged();
 
-                determineTargetPort();
                 if (TargetedDockingModule != null)
                     calculateGaugeData();
                 drawIndicatorContentsToTexture();
@@ -440,6 +441,28 @@ namespace NavyFish
             {
                 determineReferencePoint();
                 referencePartIndex = referencePoints.FindIndex(m => m.part.Equals(referencePart));
+            }
+
+            onTargetChanged();
+        }
+
+        public static void onTargetChanged()
+        {
+            resetTarget = false;
+            currentTarget = null;
+
+            if(currentActiveVessel)
+            {
+                currentTarget = FlightGlobals.fetch.VesselTarget;
+                currentTargetVessel = (currentTarget != null) ? currentTarget.GetVessel() : null;
+
+                findTargetPorts();
+
+                dockingModulesListIndex = dockingModulesList.FindIndex(m => m.Equals(currentTarget));
+                TargetedDockingModule = (dockingModulesListIndex >= 0) ? currentTarget : null;
+
+                if(allowAutoPortTargeting && (dockingModulesListIndex < 0) && (dockingModulesList.Count > 0))
+                    determineClosestTargetPort();
             }
         }
 
