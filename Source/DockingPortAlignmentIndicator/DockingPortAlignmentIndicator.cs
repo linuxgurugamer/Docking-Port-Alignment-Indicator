@@ -174,11 +174,6 @@ namespace NavyFish
         private static ITargetable lastITargetable = null;
         public static ModuleDockingNodeNamed lastNamedNode = null;
 
-        private static bool isOrientedTarget (ITargetable target)
-        {
-            return target.GetTargetingMode() == VesselTargetModes.DirectionVelocityAndOrientation;
-        }
-
         /// <summary>
         /// Adds the toolbar button from the Stock toolbar (AppLauncher)
         /// </summary>
@@ -399,7 +394,7 @@ namespace NavyFish
 
             bool _isIVA = isIVA();
 
-            if (showIndicator || (RPMPageActive && isIVA()))
+            if (showIndicator || (RPMPageActive && _isIVA))
             {
                 if (currentActiveVessel != FlightGlobals.ActiveVessel)
                     onVesselChanged();
@@ -415,7 +410,8 @@ namespace NavyFish
                 }
 
                 determineTargetPort();
-                if (targetedDockingModule != null) calculateGaugeData();
+                if (TargetedDockingModule != null)
+                    calculateGaugeData();
                 drawIndicatorContentsToTexture();
             }
 
@@ -454,6 +450,72 @@ namespace NavyFish
                 return InternalCamera.Instance.isActive;
             }
             else return false;
+        }
+
+        private static bool isOrientedTarget (ITargetable target)
+        {
+            return target.GetTargetingMode() == VesselTargetModes.DirectionVelocityAndOrientation;
+        }
+
+        /// <summary>
+        /// Returns true if the targetPort is compatible with the current vessel.
+        /// </summary>
+        /// If the controlling part of the current vessel is a docking port, then it
+        /// is compared against the target port. Otherwise, all docking ports on the
+        /// current vessel are checked.
+        /// <param name="targetPort"></param>
+        /// <returns></returns>
+        private static bool isCompatiblePort(ModuleDockingNode targetPort)
+        {
+            bool compatible = false;
+
+            // Get the controlling docking port, or all of them
+            var dockingPorts  = referencePart?.FindModulesImplementing<ModuleDockingNode>();
+            if ((dockingPorts?.Count ?? 0) == 0) {
+                dockingPorts = FlightGlobals.ActiveVessel.FindPartModulesImplementing<ModuleDockingNode>();
+            }
+
+            // See if one of the source ports is compatible with the target port.
+            using (IEnumerator<ModuleDockingNode> dnEnumerator = dockingPorts.GetEnumerator())
+            {
+                while (!compatible && dnEnumerator.MoveNext())
+                {
+                    var sourcePort = dnEnumerator.Current;
+
+                    // Can't dock using a disabled port
+                    if (sourcePort.IsDisabled) {
+                        continue;
+                    }
+                    if (!sourcePort.state.StartsWith("Ready")) {
+                        continue;
+                    }
+                    // If one port is gendered, they both have to be
+                    // TODO: verify with mods; stock ports are ungendered
+                    if (sourcePort.gendered != targetPort.gendered) {
+                        continue;
+                    }
+                    // If the ports are gendered, they have to be opposite gender
+                    // TODO: Possibly if one port is gendered, but the other isn't, ignore?
+                    if (sourcePort.gendered && (sourcePort.genderFemale == targetPort.genderFemale)) {
+                        continue;
+                    }
+
+                    // Verify the ports are the same size
+                    // NB: Since v1.0.5 of KSP, docking ports can be "multiport" in which case the nodeType is a comma-delimited string
+                    //if (sourcePort.nodeType != targetPort.nodeType) {
+                    char [] separator = { ',' };
+                    var spNodes = sourcePort.nodeType.Split(separator, StringSplitOptions.RemoveEmptyEntries);
+                    var dpNodes = targetPort.nodeType.Split(separator, StringSplitOptions.RemoveEmptyEntries);
+                    if (spNodes.Intersect(dpNodes).Count() == 0) {
+                        continue;
+                    }
+
+                    // Gender-compatible, same size, so, yayy?
+                    compatible = true;
+                }
+            }
+
+            return compatible;
         }
 
         private static void findReferencePoints()
@@ -545,67 +607,6 @@ namespace NavyFish
 
             dockingModulesListIndex = shortestDistanceIndex;
             TargetedDockingModule = dockingModulesList[dockingModulesListIndex];
-        }
-
-        /// <summary>
-        /// Returns true if the targetPort is compatible with the current vessel.
-        /// </summary>
-        /// If the controlling part of the current vessel is a docking port, then it
-        /// is compared against the target port. Otherwise, all docking ports on the
-        /// current vessel are checked.
-        /// <param name="targetPort"></param>
-        /// <returns></returns>
-        private static bool isCompatiblePort(ModuleDockingNode targetPort)
-        {
-            bool compatible = false;
-
-            // Get the controlling docking port, or all of them
-            var dockingPorts  = referencePart?.FindModulesImplementing<ModuleDockingNode>();
-            if ((dockingPorts?.Count ?? 0) == 0) {
-                dockingPorts = FlightGlobals.ActiveVessel.FindPartModulesImplementing<ModuleDockingNode>();
-            }
-
-            // See if one of the source ports is compatible with the target port.
-            using (IEnumerator<ModuleDockingNode> dnEnumerator = dockingPorts.GetEnumerator())
-            {
-                while (!compatible && dnEnumerator.MoveNext())
-                {
-                    var sourcePort = dnEnumerator.Current;
-
-                    // Can't dock using a disabled port
-                    if (sourcePort.IsDisabled) {
-                        continue;
-                    }
-                    if (!sourcePort.state.StartsWith("Ready")) {
-                        continue;
-                    }
-                    // If one port is gendered, they both have to be
-                    // TODO: verify with mods; stock ports are ungendered
-                    if (sourcePort.gendered != targetPort.gendered) {
-                        continue;
-                    }
-                    // If the ports are gendered, they have to be opposite gender
-                    // TODO: Possibly if one port is gendered, but the other isn't, ignore?
-                    if (sourcePort.gendered && (sourcePort.genderFemale == targetPort.genderFemale)) {
-                        continue;
-                    }
-
-                    // Verify the ports are the same size
-                    // NB: Since v1.0.5 of KSP, docking ports can be "multiport" in which case the nodeType is a comma-delimited string
-                    //if (sourcePort.nodeType != targetPort.nodeType) {
-                    char [] separator = { ',' };
-                    var spNodes = sourcePort.nodeType.Split(separator, StringSplitOptions.RemoveEmptyEntries);
-                    var dpNodes = targetPort.nodeType.Split(separator, StringSplitOptions.RemoveEmptyEntries);
-                    if (spNodes.Intersect(dpNodes).Count() == 0) {
-                        continue;
-                    }
-
-                    // Gender-compatible, same size, so, yayy?
-                    compatible = true;
-                }
-            }
-
-            return compatible;
         }
 
         public static int tickCount = 0;
@@ -883,7 +884,7 @@ namespace NavyFish
         {
             Transform selfTransform = FlightGlobals.ActiveVessel.ReferenceTransform;
          
-            ITargetable targetPort = targetedDockingModule as ITargetable;
+            ITargetable targetPort = TargetedDockingModule as ITargetable;
 
             Transform targetTransform = targetPort.GetTransform();
 
@@ -1089,7 +1090,7 @@ namespace NavyFish
 
             float baseScale = 1f;
 
-            if (targetedDockingModule != null)
+            if (TargetedDockingModule != null)
             {
                 if (useCDI)
                 {
@@ -1464,7 +1465,7 @@ namespace NavyFish
             {
                 targetDisplayName = Localizer.GetStringByTag("#no_vessel_targeted");
             }
-            else if (targetedDockingModule == null)
+            else if (TargetedDockingModule == null)
             {
                 if (targetOutOfRange)
                 {
@@ -1593,7 +1594,7 @@ namespace NavyFish
             // has already been destroyed but targetedDockingModule is not null and, being
             // an interface variable, does not use the Unity operator == overload.  So we
             // need to do a bit more to avoid a Null-reference exception.
-            var tdmTransform = targetedDockingModule?.GetTransform();
+            var tdmTransform = TargetedDockingModule?.GetTransform();
             // tdmTransform is an actual Unity object variable, so it uses the overloaded
             // Unity operator == and correctly detects a destroyed GameObject.
             if (tdmTransform == null) {
