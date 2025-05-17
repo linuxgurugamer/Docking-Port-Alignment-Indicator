@@ -621,6 +621,73 @@ namespace NavyFish
             TargetedDockingModule = dockingModulesList[dockingModulesListIndex];
         }
 
+        public static void cycleReferencePoint(int direction)
+        {
+            if(referencePoints.Count == 0)
+                return;
+
+            int newIndex = referencePartIndex + direction;
+            if (newIndex < 0)
+            {
+                newIndex = referencePoints.Count - 1;
+            }
+            else if (newIndex >= referencePoints.Count)
+            {
+                newIndex = 0;
+            }
+
+            PartModule module = referencePoints[newIndex];
+
+            var node = module as ModuleDockingNode;
+            var pod = module as ModuleCommand;
+            var claw = module as ModuleGrappleNode;
+
+            //Thanks Mihara!
+            if (node != null)
+            {
+                node.MakeReferenceTransform();
+            } else if (pod != null)
+            {
+                pod.MakeReference();
+            } else if (claw != null)
+            {
+                claw.MakeReferenceTransform();
+            }
+
+            determineReferencePoint();
+            referencePartIndex = newIndex;
+        }
+
+        public static void cyclePortLeft()
+        {
+            if (dockingModulesList.Count == 0)
+                return;
+
+            dockingModulesListIndex = (dockingModulesListIndex > 0) ? (dockingModulesListIndex - 1) : (dockingModulesList.Count - 1);
+
+            TargetedDockingModule = dockingModulesList[dockingModulesListIndex];
+
+            if (!TargetedDockingModule.GetVessel().packed)
+            {
+                FlightGlobals.fetch.SetVesselTarget(TargetedDockingModule);
+            }
+        }
+
+        public static void cyclePortRight()
+        {
+            if (dockingModulesList.Count == 0)
+                return;
+
+            dockingModulesListIndex = (dockingModulesListIndex + 1) % dockingModulesList.Count;
+
+            TargetedDockingModule = dockingModulesList[dockingModulesListIndex];
+
+            if (!TargetedDockingModule.GetVessel().packed)
+            {
+                FlightGlobals.fetch.SetVesselTarget(TargetedDockingModule);
+            }
+        }
+
         private static void calculateGaugeData()
         {
             Transform selfTransform = FlightGlobals.ActiveVessel.ReferenceTransform;
@@ -1371,73 +1438,6 @@ namespace NavyFish
             GUI.DrawTexture(selectedPortHUDRect, targetPort, ScaleMode.ScaleToFit, true);
             GUI.color = originalColor;
             //print("drawTargetPortIndicator: End");
-        }
-
-        public static void cycleReferencePoint(int direction)
-        {
-            if(referencePoints.Count == 0)
-                return;
-
-            int newIndex = referencePartIndex + direction;
-            if (newIndex < 0)
-            {
-                newIndex = referencePoints.Count - 1;
-            }
-            else if (newIndex >= referencePoints.Count)
-            {
-                newIndex = 0;
-            }
-
-            PartModule module = referencePoints[newIndex];
-
-            var node = module as ModuleDockingNode;
-            var pod = module as ModuleCommand;
-            var claw = module as ModuleGrappleNode;
-
-            //Thanks Mihara!
-            if (node != null)
-            {
-                node.MakeReferenceTransform();
-            } else if (pod != null)
-            {
-                pod.MakeReference();
-            } else if (claw != null)
-            {
-                claw.MakeReferenceTransform();
-            }
-
-            determineReferencePoint();
-            referencePartIndex = newIndex;
-        }
-
-        public static void cyclePortLeft()
-        {
-            if (dockingModulesList.Count == 0)
-                return;
-
-            dockingModulesListIndex = (dockingModulesListIndex > 0) ? (dockingModulesListIndex - 1) : (dockingModulesList.Count - 1);
-
-            TargetedDockingModule = dockingModulesList[dockingModulesListIndex];
-
-            if (!TargetedDockingModule.GetVessel().packed)
-            {
-                FlightGlobals.fetch.SetVesselTarget(TargetedDockingModule);
-            }
-        }
-
-        public static void cyclePortRight()
-        {
-            if (dockingModulesList.Count == 0)
-                return;
-
-            dockingModulesListIndex = (dockingModulesListIndex + 1) % dockingModulesList.Count;
-
-            TargetedDockingModule = dockingModulesList[dockingModulesListIndex];
-
-            if (!TargetedDockingModule.GetVessel().packed)
-            {
-                FlightGlobals.fetch.SetVesselTarget(TargetedDockingModule);
-            }
         }
 
         public static void clearRenameHighlightBoxRPM()
