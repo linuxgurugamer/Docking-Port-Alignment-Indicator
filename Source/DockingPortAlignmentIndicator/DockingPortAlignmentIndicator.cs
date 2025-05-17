@@ -157,44 +157,22 @@ namespace NavyFish
         public static ModuleDockingNodeNamed referencePartNamed;
 
         static ITargetable targetedDockingModule = null;
+        static ITargetable TargetedDockingModule
+        {
+            get { return targetedDockingModule; }
+            set
+            {
+                targetedDockingModule = value;
+                if(targetedDockingModule == null)
+                    targetedDockingModuleNamed = null;
+                else
+                    targetedDockingModuleNamed = (targetedDockingModule as PartModule).part.FindModuleImplementing<ModuleDockingNodeNamed>();
+            }
+        }
+        static ModuleDockingNodeNamed targetedDockingModuleNamed = null;
 
         private static ITargetable lastITargetable = null;
         public static ModuleDockingNodeNamed lastNamedNode = null;
-
-        public static ModuleDockingNodeNamed targetNamedModule
-        {
-            get
-            {
-                if (targetedDockingModule == null) return null;
-                if (!(targetedDockingModule is PartModule)) return null;
-
-                if(targetedDockingModule == lastITargetable) return lastNamedNode;
-
-                lastITargetable = targetedDockingModule;
-
-                List<ModuleDockingNodeNamed> modules = (targetedDockingModule as PartModule).part.FindModulesImplementing<ModuleDockingNodeNamed>();
-                if (modules.Count > 0)
-                {
-                    if (targetedDockingModule is ModuleDockingNode && modules.Count > 1)
-                    {
-                        foreach (ModuleDockingNodeNamed namedModule in modules)
-                        {
-                            if (namedModule.controlTransformName.Equals((targetedDockingModule as ModuleDockingNode).controlTransformName))
-                            {
-                                lastNamedNode = namedModule;
-                                return namedModule;
-                            }
-                        }
-                    }
-                    lastNamedNode = modules[0];
-                    return modules[0];
-                }
-                else
-                {
-                    return null;
-                }   
-            }
-        }
 
         private static bool isOrientedTarget (ITargetable target)
         {
@@ -499,6 +477,74 @@ namespace NavyFish
         {
             referencePart = FlightGlobals.ActiveVessel.GetReferenceTransformPart();
             referencePartNamed = referencePart ? referencePart.FindModuleImplementing<ModuleDockingNodeNamed>() : null;
+        }
+
+        private static void findTargetPorts()
+        {
+            dockingModulesList.Clear();
+
+            if(currentTargetVessel == null)
+                return;
+
+            List<ITargetable> ITargetableList = currentTargetVessel.FindPartModulesImplementing<ITargetable>();
+            foreach (ITargetable tgt in ITargetableList)
+            {
+                if (tgt is ModuleDockingNode)
+                {
+                    ModuleDockingNode port = tgt as ModuleDockingNode;
+                    Log($"Adding Docking Port {port} (state={port.state}, other={port.otherNode}) to list of targets.");
+                    // MKW: if node was attached in the VAB, state is "PreAttached"
+                    if (excludeDockedPorts &&
+                            (port.state.StartsWith("Docked", StringComparison.OrdinalIgnoreCase) || 
+                            port.state.StartsWith("PreAttached", StringComparison.OrdinalIgnoreCase))
+                        )
+                    {
+                        //print("continue");
+                        //do not add to list if module is already docked
+                        continue;
+                    }
+
+                    if(restrictDockingPorts && !isCompatiblePort(port))
+                    {
+                        // Do not add to list if destination port doesn't match
+                        continue;
+                    }
+
+                    //print("1stAdd");
+                    dockingModulesList.Add(tgt);
+                }
+                else
+                {
+                    PartModule pm = tgt as PartModule;
+
+                    if(restrictDockingPorts && pm && !DockingFunctionsHelper.IsReadyFor(pm.part, referencePart))
+                        continue;
+
+                    //print("2ndAdd");
+                    dockingModulesList.Add(tgt);
+                }
+            }
+        }
+
+        private static void determineClosestTargetPort()
+        {
+            // Automatically select closest docking port.
+            float shortestDistance = float.MaxValue;
+
+            int shortestDistanceIndex = -1;
+            for (int i = 0; i < dockingModulesList.Count; i++)
+            {
+                ITargetable port = dockingModulesList[i];
+                float distance = Vector3.Distance(port.GetTransform().position, FlightGlobals.ActiveVessel.ReferenceTransform.position);
+                if (distance < shortestDistance)
+                {
+                shortestDistance = distance;
+                shortestDistanceIndex = i;
+                }
+            }
+
+            dockingModulesListIndex = shortestDistanceIndex;
+            TargetedDockingModule = dockingModulesList[dockingModulesListIndex];
         }
 
         /// <summary>
@@ -1429,13 +1475,13 @@ namespace NavyFish
                     targetDisplayName = Localizer.GetStringByTag("#no_port_targeted");
                 }
             }
-            else if (targetNamedModule == null)
+            else if (targetedDockingModuleNamed == null)
             {
-                targetDisplayName = targetedDockingModule.GetDisplayName();
+                targetDisplayName = TargetedDockingModule.GetName();
             }
             else
             {
-                targetDisplayName = targetNamedModule.portName;
+                targetDisplayName = targetedDockingModuleNamed.portName;
             }
             return targetDisplayName;
         }
