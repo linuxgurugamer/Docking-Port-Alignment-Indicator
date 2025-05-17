@@ -417,43 +417,32 @@ namespace NavyFish
             //print("DPAI_DEBUG sceneElligble:" + sceneElligibleForIndicator);
             //print("DPAI_DEBUG guageVisibility" + gaugeVisiblityToggledOn);
 
-            if (sceneElligibleForIndicator && gaugeVisiblityToggledOn)
-            {
-                showIndicator = true;
+            showIndicator = (sceneElligibleForIndicator && gaugeVisiblityToggledOn);
 
-   
-
-                //mousePos.Set(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
-                //print(mousePos);
-                //if (windowPosition.Contains(mousePos))
-                //{
-                //    //print("Contains Mouse");
-                //    containsMouse = true;
-                //    //InputLockManager.SetControlLock(ControlTypes.All, "DPAI_LOCK");
-                //}
-                //else
-                //{
-                //    containsMouse = false;
-                //    //InputLockManager.RemoveControlLock("DPAI_LOCK");
-                //}
-            }
-            else
-            {
-                showIndicator = false;
-                
-            }
+            bool _isIVA = isIVA();
 
             if (showIndicator || (RPMPageActive && isIVA()))
             {
                 if (currentActiveVessel != FlightGlobals.ActiveVessel)
                     onVesselChanged();
                 else if (referencePart != currentActiveVessel.GetReferenceTransformPart())
+                {
+                    if(wasLastIVA != _isIVA)
+                    {
+                        FlightGlobals.ActiveVessel.SetReferenceTransform(referencePart);
+                        goto skip; // do nothing, we restart in next frame
+                    }
+
                     onReferenceChanged();
+                }
 
                 determineTargetPort();
                 if (targetedDockingModule != null) calculateGaugeData();
                 drawIndicatorContentsToTexture();
             }
+
+        skip:
+            wasLastIVA = _isIVA;
         }
 
         public static void onVesselChanged()
