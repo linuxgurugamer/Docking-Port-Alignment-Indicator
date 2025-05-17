@@ -138,7 +138,8 @@ namespace NavyFish
 
         static List<ITargetable> dockingModulesList = new List<ITargetable>();
         static int dockingModulesListIndex = -1;
-        
+
+        static Vessel currentActiveVessel = null;
         static ITargetable currentTarget = null;
         static ITargetable lastTarget = null;
         static Vessel currentTargetVessel = null;
@@ -444,10 +445,23 @@ namespace NavyFish
 
             if (showIndicator || (RPMPageActive && isIVA()))
             {
+                if (currentActiveVessel != FlightGlobals.ActiveVessel)
+                    onVesselChanged();
+
                 determineTargetPort();
                 if (targetedDockingModule != null) calculateGaugeData();
                 drawIndicatorContentsToTexture();
             }
+        }
+
+        public static void onVesselChanged()
+        {
+            currentActiveVessel = FlightGlobals.ActiveVessel;
+
+            referencePoints.Clear();
+
+            if(currentActiveVessel)
+                findReferencePoints();
         }
 
         private static bool isIVA()
@@ -461,11 +475,7 @@ namespace NavyFish
 
         private static void findReferencePoints()
         {
-            determineReferencePoint();
-
-            referencePoints.Clear();
-
-            foreach (Part thatPart in FlightGlobals.ActiveVessel.Parts)
+            foreach (Part thatPart in currentActiveVessel.Parts)
             {
                 foreach (PartModule thatModule in thatPart.Modules)
                 {
@@ -478,39 +488,17 @@ namespace NavyFish
                     }
                 }
             }
-
-            determineReferencePointIndex();
         }
 
         private static void determineReferencePoint()
         {
-            Part refPart = FlightGlobals.ActiveVessel.GetReferenceTransformPart();
-            if (refPart != null && refPart != referencePart)
-            {
-                referencePart = refPart;
-                referencePartNamed = null;
-                List<ModuleDockingNodeNamed> namedPorts = referencePart.FindModulesImplementing<ModuleDockingNodeNamed>();
-
-                if (namedPorts.Count > 0)
-                {
-                    referencePartNamed = namedPorts[0];
-                }
-            }
+            referencePart = FlightGlobals.ActiveVessel.GetReferenceTransformPart();
+            referencePartNamed = referencePart ? referencePart.FindModuleImplementing<ModuleDockingNodeNamed>() : null;
         }
 
         private static void determineReferencePointIndex()
         {
-            referencePartIndex = -1;
-            int i=0;
-            foreach (PartModule m in referencePoints)
-            {
-                if (m.part.Equals(referencePart))
-                {
-                    referencePartIndex = i;
-                    break;
-                }
-                i++;
-            }
+            referencePartIndex = referencePoints.FindIndex(m => m.part.Equals(referencePart));
         }
 
         /// <summary>
@@ -611,7 +599,7 @@ namespace NavyFish
                 portWasCycled = false;
                 dockingModulesList.Clear();
                 lastReferencePart = null;
-                findReferencePoints();
+//                findReferencePoints();
                 wasLastIVA = isIVA();
                 wasLastMap = MapView.MapIsEnabled;
             }
@@ -649,7 +637,7 @@ namespace NavyFish
                         {
                             FlightGlobals.ActiveVessel.SetReferenceTransform(lastReferencePart);
                             //print("DPAI: Re-setting Reference Part - tick " + tickCount);
-                            findReferencePoints();
+//                            findReferencePoints();
                         }
                     }
                 }
@@ -1613,7 +1601,7 @@ namespace NavyFish
         {
             if (referencePartIndex == -1)
             {
-                findReferencePoints();
+//                findReferencePoints();
             }
 
             if (referencePartIndex == -1) return;
