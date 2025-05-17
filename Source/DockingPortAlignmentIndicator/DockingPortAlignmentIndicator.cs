@@ -459,6 +459,60 @@ namespace NavyFish
             else return false;
         }
 
+        private static void findReferencePoints()
+        {
+            determineReferencePoint();
+
+            referencePoints.Clear();
+
+            foreach (Part thatPart in FlightGlobals.ActiveVessel.Parts)
+            {
+                foreach (PartModule thatModule in thatPart.Modules)
+                {
+                    var thatNode = thatModule as ModuleDockingNode;
+                    var thatCommand = thatModule as ModuleCommand;
+                    var thatClaw = thatModule as ModuleGrappleNode;
+                    if (thatNode != null || thatCommand != null || thatClaw != null)
+                    {
+                        referencePoints.Add(thatModule);
+                    }
+                }
+            }
+
+            determineReferencePointIndex();
+        }
+
+        private static void determineReferencePoint()
+        {
+            Part refPart = FlightGlobals.ActiveVessel.GetReferenceTransformPart();
+            if (refPart != null && refPart != referencePart)
+            {
+                referencePart = refPart;
+                referencePartNamed = null;
+                List<ModuleDockingNodeNamed> namedPorts = referencePart.FindModulesImplementing<ModuleDockingNodeNamed>();
+
+                if (namedPorts.Count > 0)
+                {
+                    referencePartNamed = namedPorts[0];
+                }
+            }
+        }
+
+        private static void determineReferencePointIndex()
+        {
+            referencePartIndex = -1;
+            int i=0;
+            foreach (PartModule m in referencePoints)
+            {
+                if (m.part.Equals(referencePart))
+                {
+                    referencePartIndex = i;
+                    break;
+                }
+                i++;
+            }
+        }
+
         /// <summary>
         /// Returns true if the targetPort is compatible with the current vessel.
         /// </summary>
@@ -1597,60 +1651,6 @@ namespace NavyFish
 
                 determineReferencePoint();
                 determineReferencePointIndex();
-            }
-        }
-
-        private static void findReferencePoints()
-        {
-            determineReferencePoint();
-
-            referencePoints.Clear();
-
-            foreach (Part thatPart in FlightGlobals.ActiveVessel.Parts)
-            {
-                foreach (PartModule thatModule in thatPart.Modules)
-                {
-                    var thatNode = thatModule as ModuleDockingNode;
-                    var thatCommand = thatModule as ModuleCommand;
-                    var thatClaw = thatModule as ModuleGrappleNode;
-                    if (thatNode != null || thatCommand != null || thatClaw != null)
-                    {
-                        referencePoints.Add(thatModule);
-                    }
-                }
-            }
-
-            determineReferencePointIndex();
-        }
-
-        private static void determineReferencePoint()
-        {
-            Part refPart = FlightGlobals.ActiveVessel.GetReferenceTransformPart();
-            if (refPart != null && refPart != referencePart)
-            {
-                referencePart = refPart;
-                referencePartNamed = null;
-                List<ModuleDockingNodeNamed> namedPorts = referencePart.FindModulesImplementing<ModuleDockingNodeNamed>();
-
-                if (namedPorts.Count > 0)
-                {
-                    referencePartNamed = namedPorts[0];
-                }
-            }
-        }
-
-        private static void determineReferencePointIndex()
-        {
-            referencePartIndex = -1;
-            int i=0;
-            foreach (PartModule m in referencePoints)
-            {
-                if (m.part.Equals(referencePart))
-                {
-                    referencePartIndex = i;
-                    break;
-                }
-                i++;
             }
         }
 
