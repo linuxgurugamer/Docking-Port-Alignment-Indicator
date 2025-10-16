@@ -30,6 +30,7 @@ using UnityEngine;
 using KSP.IO;
 using KSP.UI.Screens;
 using KSP.Localization;
+using KSPAssets.KSPedia;
 using System.Collections.Generic;
 
 using static NavyFish.LogWrapper;
@@ -41,6 +42,7 @@ namespace NavyFish
     public class DockingPortAlignmentIndicator : MonoBehaviour
     {
         private static PluginConfiguration config;
+        private static bool configDirty = true;
         private static bool hasInitializedStyles = false;
         private static GUIStyle windowStyle, labelStyle, settingsButtonStyle;
         private static Rect windowPosition = new Rect();
@@ -206,7 +208,7 @@ namespace NavyFish
         /// Called directly and also as a GameEvent callback.
         private void addToolBarButtonToStockAppLauncher ()
         {
-            Log($"addToolBarButtonToStockAppLauncher (GameScene=={HighLogic.LoadedScene}, appLauncherButton=={appLauncherButton})");
+            LogD($"addToolBarButtonToStockAppLauncher (GameScene=={HighLogic.LoadedScene}, appLauncherButton=={appLauncherButton})");
             if (HighLogic.LoadedSceneIsFlight && appLauncherButton == null) {
                 //print("DPAI: adding stock appLauncher button");
                 //RUIToggleButton.OnTrue onTrueDelegate = new RUIToggleButton.OnTrue(onShowGUI);
@@ -228,7 +230,7 @@ namespace NavyFish
         /// Called directly and also as a GameEvent callback.
         private void removeToolBarButtonFromAppLauncher()
         {
-            Log("removeToolBarButtonFromAppLauncher (appLauncherButton=={appLauncherButton})");
+            LogD("removeToolBarButtonFromAppLauncher (appLauncherButton=={appLauncherButton})");
             if (appLauncherButton != null)
             {
                 ApplicationLauncher.Instance.RemoveModApplication(appLauncherButton);
@@ -241,7 +243,7 @@ namespace NavyFish
         /// </summary>
         private void OnAppLauncherReady()
         {
-            Log($"OnAppLauncherReady (GameScene=={HighLogic.LoadedScene}, appLauncherButton=={appLauncherButton})");
+            LogD($"OnAppLauncherReady (GameScene=={HighLogic.LoadedScene}, appLauncherButton=={appLauncherButton})");
             if (HighLogic.LoadedSceneIsFlight)
             {
                 addToolBarButtonToStockAppLauncher();
@@ -252,16 +254,42 @@ namespace NavyFish
             }
         }
 
+        // Callback for toolbar button click
         private void onShowGUI()
         {
-            //print("DPAI_DEBUG onShowGUI()");
+            LogD("onShowGUI()");
             gaugeVisiblityToggledOn = true;
         }
 
+        // Callback for toolbar button click
         private void onHideGUI()
         {
-            //print("DPAI_DEBUG onHideGUI()");
+            LogD("onHideGUI()");
             gaugeVisiblityToggledOn = false;
+        }
+
+        bool wasVisible = false;
+        // GameEvents.onKSPediaSpawn
+        // Called when the KSPedia is shown
+        private void OnKSPediaSpawn ()
+        {
+            LogD($"GameEvents.OnKSPediaSpawn()");
+            wasVisible = gaugeVisiblityToggledOn;
+            if (wasVisible) {
+                onHideGUI();
+            }
+        }
+
+        // GameEvents.onKSPediaDespawn
+        // Note: this event seems to get fired twice when the KSPedia is closed,
+        //       so ensure this function only performs its actions once.
+        private void OnKSPediaDespawn ()
+        {
+            LogD($"GameEvents.OnKSPediaDespawn()");
+            if (wasVisible) {
+                onShowGUI();
+                wasVisible = false;
+            }
         }
 
         /// <summary>
@@ -269,7 +297,7 @@ namespace NavyFish
         /// </summary>
         public void Awake()
         {
-            Log($"Awake (GameScene=={HighLogic.LoadedScene}, appLauncherButton=={appLauncherButton})");
+            LogD($"Awake (GameScene=={HighLogic.LoadedScene}, appLauncherButton=={appLauncherButton})");
             loadTextures();
         }
         
@@ -278,7 +306,7 @@ namespace NavyFish
         /// </summary>
         public void Start()
         {
-            Log($"Start (GameScene=={HighLogic.LoadedScene}, appLauncherButton=={appLauncherButton})");
+            LogD($"Start (GameScene=={HighLogic.LoadedScene}, appLauncherButton=={appLauncherButton})");
             LoadPrefs();
 
             updateToolBarButton();
@@ -286,6 +314,11 @@ namespace NavyFish
             if ( !hasInitializedStyles ) initStyles();
 
             settingsWindowPosition = new Rect(0, windowPosition.yMax, 0, 0);
+
+            //GameEvents.debugEvents = true;
+
+            GameEvents.onGUIKSPediaSpawn.Add(OnKSPediaSpawn);
+            GameEvents.onGUIKSPediaDespawn.Add(OnKSPediaDespawn);
         }
 
         /// <summary>
@@ -293,8 +326,10 @@ namespace NavyFish
         /// </summary>
         private void OnDestroy()
         {
-            Log($"OnDestroy (GameScene=={HighLogic.LoadedScene}, appLauncherButton=={appLauncherButton})");
+            LogD($"OnDestroy (GameScene=={HighLogic.LoadedScene}, appLauncherButton=={appLauncherButton})");
 
+            saveConfigSettings();
+            
             if (forceStockAppLauncher || !blizzyToolbarAvailable)
             {
                 destroyAppLauncherButton();
@@ -303,6 +338,8 @@ namespace NavyFish
             {
                 destroyBlizzyButton();
             }
+            GameEvents.onGUIKSPediaSpawn.Remove(OnKSPediaSpawn);
+            GameEvents.onGUIKSPediaDespawn.Remove(OnKSPediaDespawn);
         }
 
         /// <summary>
@@ -364,7 +401,7 @@ namespace NavyFish
         /// </summary>
         private void updateToolBarButton()
         {
-            Log($"updateToolBarButton (GameScene=={HighLogic.LoadedScene}, appLauncherButton=={appLauncherButton})");
+            LogD($"updateToolBarButton (GameScene=={HighLogic.LoadedScene}, appLauncherButton=={appLauncherButton})");
             blizzyToolbarAvailable = ToolbarManager.ToolbarAvailable;
 
             //Debug.Log("DPAI START");
@@ -635,7 +672,7 @@ namespace NavyFish
                                     if (tgt is ModuleDockingNode)
                                     {
                                         ModuleDockingNode port = tgt as ModuleDockingNode;
-                                        Log($"Adding Docking Port {port} (state={port.state}, other={port.otherNode}) to list of targets.");
+                                        LogD($"Adding Docking Port {port} (state={port.state}, other={port.otherNode}) to list of targets.");
                                         // MKW: if node was attached in the VAB, state is "PreAttached"
                                         if (excludeDockedPorts &&
                                                 (port.state.StartsWith("Docked", StringComparison.OrdinalIgnoreCase) || 
@@ -1158,7 +1195,6 @@ namespace NavyFish
             {
                 lastPosition.x = windowPosition.x;
                 lastPosition.y = windowPosition.y;
-                saveWindowPosition();
             }
 
         }
@@ -1203,7 +1239,7 @@ namespace NavyFish
             drawHudIcon = GUILayout.Toggle(drawHudIcon, Localizer.GetStringByTag("#display_hud_target_port_icon"));
             if (drawHudIcon != last)
             {
-                saveConfigSettings();
+                configDirty =  true;
                 settingsWindowPosition.height = 0;
             }
             GUILayout.EndHorizontal();
@@ -1216,7 +1252,7 @@ namespace NavyFish
                 showHUDIconWhileIva = GUILayout.Toggle(showHUDIconWhileIva, Localizer.GetStringByTag("#display_when_using_rpm"));
                 if (showHUDIconWhileIva != last)
                 {
-                    saveConfigSettings();
+                    configDirty =  true;
                 }
                 GUILayout.EndHorizontal();
 
@@ -1229,7 +1265,7 @@ namespace NavyFish
                 GUILayout.EndHorizontal();
                 if (targetHUDiconSize != lastFloat)
                 {
-                    saveConfigSettings();
+                    configDirty =  true;
                 }
             }
 
@@ -1238,7 +1274,7 @@ namespace NavyFish
             allowAutoPortTargeting = GUILayout.Toggle(allowAutoPortTargeting, Localizer.GetStringByTag("#enable_auto_targeting_and_cycling"));
             if (allowAutoPortTargeting != last)
             {
-                saveConfigSettings();
+                configDirty =  true;
                 settingsWindowPosition.height = 0;
                 resetTarget = true;
             }
@@ -1252,14 +1288,14 @@ namespace NavyFish
                 excludeDockedPorts = GUILayout.Toggle(excludeDockedPorts, Localizer.GetStringByTag("#exlude_docked_ports"));
                 if (excludeDockedPorts != last)
                 {
-                    saveConfigSettings();
+                    configDirty =  true;
                     resetTarget = true;
                 }
                 last = restrictDockingPorts;
                 restrictDockingPorts = GUILayout.Toggle(restrictDockingPorts, Localizer.GetStringByTag("#restrict_docking_ports"));
                 if (restrictDockingPorts != last)
                 {
-                    saveConfigSettings();
+                    configDirty =  true;
                     resetTarget = true;
                 }
                 GUILayout.EndHorizontal();
@@ -1277,7 +1313,7 @@ namespace NavyFish
                 windowPosition.width = foregroundTextureWidth * gaugeScale;
                 windowPosition.height = foregroundTextureHeight * gaugeScale;
                 windowPosition.y = settingsWindowPosition.y - windowPosition.height;
-                saveConfigSettings();
+                configDirty = true;
             }
 
             GUILayout.BeginHorizontal();
@@ -1285,14 +1321,18 @@ namespace NavyFish
 
             last = alignmentFlipXAxis;
             alignmentFlipXAxis = GUILayout.Toggle(alignmentFlipXAxis, Localizer.GetStringByTag("#invert_alignment_x"));
-            if (alignmentFlipXAxis != last) saveConfigSettings();
+            if (alignmentFlipXAxis != last) {
+                configDirty = true;
+            }
 
             GUILayout.FlexibleSpace();
             //GUILayout.EndHorizontal();
             //GUILayout.BeginHorizontal();
             last = translationFlipXAxis;
             translationFlipXAxis = GUILayout.Toggle(translationFlipXAxis, Localizer.GetStringByTag("#invert_translation_x"));
-            if (translationFlipXAxis != last) saveConfigSettings();
+            if (translationFlipXAxis != last) {
+                configDirty = true;
+            }
 
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
@@ -1301,14 +1341,18 @@ namespace NavyFish
             GUILayout.FlexibleSpace();
             last = alignmentFlipYAxis;
             alignmentFlipYAxis = GUILayout.Toggle(alignmentFlipYAxis, Localizer.GetStringByTag("#invert_alignment_y"));
-            if (alignmentFlipYAxis != last) saveConfigSettings();
+            if (alignmentFlipYAxis != last) {
+                configDirty = true;
+            }
 
             GUILayout.FlexibleSpace();
             //GUILayout.EndHorizontal();
             //GUILayout.BeginHorizontal();
             last = translationFlipYAxis;
             translationFlipYAxis = GUILayout.Toggle(translationFlipYAxis, Localizer.GetStringByTag("#invert_translation_y"));
-            if (translationFlipYAxis != last) saveConfigSettings();
+            if (translationFlipYAxis != last) {
+                configDirty = true;
+            }
 
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
@@ -1317,7 +1361,9 @@ namespace NavyFish
             GUILayout.FlexibleSpace();
             last = rollFlipAxis;
             rollFlipAxis = GUILayout.Toggle(rollFlipAxis, Localizer.GetStringByTag("#invert_roll_direction"));
-            if (rollFlipAxis != last) saveConfigSettings();
+            if (rollFlipAxis != last) {
+                configDirty = true;
+            }
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
 
@@ -1327,7 +1373,7 @@ namespace NavyFish
             forceStockAppLauncher = GUILayout.Toggle(forceStockAppLauncher, Localizer.GetStringByTag("#always_use_stock_toolbar"));
             if (forceStockAppLauncher != last)
             {
-                saveConfigSettings();
+                configDirty = true;
                 updateToolBarButton();
             }
             GUILayout.EndHorizontal();
@@ -1674,16 +1720,12 @@ namespace NavyFish
         }
 
         #region Preferences
-        private static void saveWindowPosition()
-        {
-            Log($"saveWindowPosition");
-            config.SetValue("window_position", windowPosition);
-            config.save();
-        }
-
         private static void saveConfigSettings()
         {
-            Log($"saveConfigSettings");
+            LogD($"saveConfigSettings");
+            if (!configDirty) {
+                return;
+            }
             //config.SetValue("show_cdi", useCDI);
             //config.SetValue("show_rolldigits", drawRollDigits);
             config.SetValue("drawHudIcon", drawHudIcon);
@@ -1699,12 +1741,14 @@ namespace NavyFish
             config.SetValue("translationFlipYAxis", translationFlipYAxis);
             config.SetValue("rollFlipAxis", rollFlipAxis);
             config.SetValue("forceStockAppLauncher", forceStockAppLauncher);
+            config.SetValue("window_position", windowPosition);
             config.save();
+            configDirty = false;
         }
 
         public static void LoadPrefs()
         {
-            Log($"LoadPrefs");
+            LogD($"LoadPrefs");
             //print("Load Prefs");
             config = PluginConfiguration.CreateForType<DockingPortAlignmentIndicator>(null);
             config.load();
@@ -1730,8 +1774,7 @@ namespace NavyFish
             translationFlipYAxis = config.GetValue<bool>("translationFlipYAxis", false);
             rollFlipAxis = config.GetValue<bool>("rollFlipAxis", false);
             forceStockAppLauncher = config.GetValue<bool>("forceStockAppLauncher", true);
-            saveWindowPosition();
-            saveConfigSettings();
+            configDirty = false;
             //print("End Load Prefs");
         }
         #endregion
